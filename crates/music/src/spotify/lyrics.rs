@@ -1,10 +1,11 @@
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http::{Method, Request, header};
-use librespot_core::{Session, spclient::CLIENT_TOKEN};
+use librespot_core::{Session, error::ErrorKind, spclient::CLIENT_TOKEN};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
@@ -19,6 +20,7 @@ const SOURCE: &str = "Spotify";
 /// A lyrics-only connection, independent of the selected playback provider.
 pub struct SpotifyLyrics {
     config: auth::AuthConfig,
+    account: auth::AuthConfig,
     connection: Mutex<Option<Connection>>,
 }
 
@@ -29,8 +31,11 @@ struct Connection {
 
 impl SpotifyLyrics {
     pub fn new(config: auth::AuthConfig) -> Self {
+        let mut account = config.clone();
+        account.cache_dir = crate::credentials::dir("spotify-lyrics");
         Self {
             config,
+            account,
             connection: Mutex::new(None),
         }
     }
@@ -41,7 +46,12 @@ impl SpotifyLyrics {
 
     async fn session(&self) -> Result<Option<Session>> {
         let mut held = self.connection.lock().await;
-        let file = self.config.file();
+        let config = if self.account.file().exists() {
+            &self.account
+        } else {
+            &self.config
+        };
+        let file = config.file();
         let modified = match std::fs::metadata(&file).and_then(|metadata| metadata.modified()) {
             Ok(modified) => modified,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -57,7 +67,7 @@ impl SpotifyLyrics {
             return Ok(Some(connection.session.clone()));
         }
         *held = None;
-        let Some(session) = auth::restore(&self.config).await? else {
+        let Some(session) = auth::restore_lyrics(config).await? else {
             return Ok(None);
         };
         // Restore can refresh the credential file itself.
@@ -74,6 +84,33 @@ impl SpotifyLyrics {
 impl LyricsProvider for SpotifyLyrics {
     fn name(&self) -> &'static str {
         SOURCE
+    }
+
+    fn account_stored(&self) -> Option<bool> {
+        Some(self.account.file().exists())
+    }
+
+    async fn connect_account(&self) -> Result<()> {
+        let session = auth::login_lyrics(&self.account, Arc::new(|_| {})).await?;
+        let modified = std::fs::metadata(self.account.file())?.modified()?;
+        let mut held = self.connection.lock().await;
+        if let Some(previous) = held.take() {
+            previous.session.shutdown();
+        }
+        *held = Some(Connection { modified, session });
+        Ok(())
+    }
+
+    async fn disconnect_account(&self) -> Result<()> {
+        if let Some(previous) = self.connection.lock().await.take() {
+            previous.session.shutdown();
+        }
+        auth::forget(&self.account);
+        Ok(())
+    }
+
+    fn cancel_account(&self) {
+        auth::release(&self.account);
     }
 
     async fn search(&self, query: &LyricsQuery) -> Result<Vec<LyricsHit>> {
@@ -169,9 +206,10 @@ pub async fn lyrics(session: &Session, track_id: &str) -> Result<Option<Lyrics>>
         .context("cannot build the Spotify lyrics request")?;
     let body = match session.http_client().request_body(request).await {
         Ok(body) => body,
+        Err(error) if error.kind == ErrorKind::NotFound => return Ok(None),
         Err(error) => {
-            log::debug!("lyrics: spotify has none for {track_id}: {error}");
-            return Ok(None);
+            return Err(error)
+                .context("cannot read Spotify lyrics; account access may be unavailable");
         }
     };
     let answer: Answer =

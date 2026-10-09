@@ -698,7 +698,7 @@ const SCRIPTS: [&str; 18] = [
     "Segoe UI Emoji",
 ];
 
-fn ui_font(cx: &App) -> Font {
+pub(crate) fn ui_font(cx: &App) -> Font {
     let chosen = Sonora::global(cx).settings.read(cx).font();
     match chosen == SYSTEM_FONT {
         true => Font {

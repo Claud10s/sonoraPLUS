@@ -9,6 +9,18 @@ use crate::shared::ambient;
 pub(crate) const NOTCH: f32 = 0.05;
 const STEP: f32 = 0.004;
 
+/// Opens the same floating lyrics window from either player layout.
+pub(crate) fn floating_lyrics_button() -> Button {
+    Button::new("player-floating-lyrics")
+        .ghost()
+        .small()
+        .icon("icons/external-link.svg")
+        .tooltip_above("floating-lyrics-open")
+        .on_click(|_, window, cx| {
+            window.dispatch_action(Box::new(input::ToggleFloatingLyrics), cx);
+        })
+}
+
 pub(crate) fn volume_icon(level: f32) -> &'static str {
     match level {
         level if level <= 0.0001 => "icons/volume-x.svg",

@@ -829,6 +829,9 @@ impl FullscreenView {
                             "lyrics-title",
                             Some(SideTab::Lyrics),
                         ),
+                        shared::transport::floating_lyrics_button()
+                            .when(frosted, Button::frosted)
+                            .rounded(theme.radius),
                         tab(
                             "fullscreen-queue",
                             "icons/list-music.svg",

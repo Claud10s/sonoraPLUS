@@ -9,6 +9,8 @@ use crate::{Lyrics, LyricsHit, LyricsLine, LyricsProvider, LyricsQuery, LyricsWo
 
 const SOURCE: &str = "LrcLib";
 const ENDPOINT: &str = "https://lrclib.net/api/search";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const RETRY_DELAY: Duration = Duration::from_secs(2);
 const AGENT: &str = concat!(
     "sonora/",
     env!("CARGO_PKG_VERSION"),
@@ -80,7 +82,7 @@ impl LyricsProvider for LrcLib {
     }
 
     async fn search(&self, query: &LyricsQuery) -> Result<Vec<LyricsHit>> {
-        let response = self
+        let request = self
             .http
             .get(ENDPOINT)
             .query(&[
@@ -88,9 +90,29 @@ impl LyricsProvider for LrcLib {
                 ("artist_name", query.artist.as_str()),
             ])
             .header("User-Agent", AGENT)
-            .send()
-            .await
-            .context("cannot reach lrclib")?;
+            .header("Accept", "application/json")
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .context("cannot build lrclib request")?;
+        // Retry temporary outages once, without holding up the other lyrics providers.
+        let mut response = None;
+        for attempt in 0..2 {
+            let result = self
+                .http
+                .execute(request.try_clone().expect("GET is cloneable"))
+                .await;
+            let retry = match &result {
+                Ok(answer) => answer.status().is_server_error(),
+                Err(error) => error.is_timeout() || error.is_connect(),
+            };
+            if attempt == 0 && retry {
+                tokio::time::sleep(RETRY_DELAY).await;
+                continue;
+            }
+            response = Some(result.context("cannot reach lrclib")?);
+            break;
+        }
+        let response = response.context("lrclib did not answer")?;
         let status = response.status();
         if !status.is_success() {
             anyhow::bail!("lrclib answered with status {status}");

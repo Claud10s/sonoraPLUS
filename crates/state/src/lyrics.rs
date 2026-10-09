@@ -51,6 +51,10 @@ pub struct Lyrics {
     ahead: Option<Task<()>>,
     ahead_of: Option<String>,
     save: Option<Task<()>>,
+    account_task: Option<Task<()>>,
+    account_cancel: Option<Task<()>>,
+    account_busy: bool,
+    account_failed: bool,
     /// Moves the old lyrics.json into the cache database, once.
     _migration: Task<()>,
 }
@@ -120,12 +124,81 @@ impl Lyrics {
             ahead: None,
             ahead_of: None,
             save: None,
+            account_task: None,
+            account_cancel: None,
+            account_busy: false,
+            account_failed: false,
             _migration: migration,
         }
     }
 
     pub fn state(&self) -> &LyricsState {
         &self.state
+    }
+
+    /// Connection state for a lyrics-only account, independent of the music session.
+    pub fn account(&self, source: &str) -> Option<(bool, bool, bool)> {
+        let provider = self
+            .providers
+            .iter()
+            .find(|provider| provider.name() == source)?;
+        Some((
+            provider.account_stored()?,
+            self.account_busy,
+            self.account_failed,
+        ))
+    }
+
+    /// Opens account authorization, disconnects it, or cancels an authorization in progress.
+    pub fn toggle_account(&mut self, source: &str, cx: &mut Context<Self>) {
+        let Some(provider) = self
+            .providers
+            .iter()
+            .find(|provider| provider.name() == source)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(stored) = provider.account_stored() else {
+            return;
+        };
+        if self.account_busy {
+            let worker = self.io.spawn(async move {
+                provider.cancel_account();
+                Ok(())
+            });
+            self.account_cancel = Some(cx.spawn(async move |_, _| {
+                join(worker).await.ok();
+            }));
+            return;
+        }
+        self.account_busy = true;
+        self.account_failed = false;
+        let worker = self.io.spawn(async move {
+            match stored {
+                true => provider.disconnect_account().await,
+                false => provider.connect_account().await,
+            }
+        });
+        self.account_task = Some(cx.spawn(async move |this, cx| {
+            let result = join(worker).await;
+            this.update(cx, |this, cx| {
+                this.account_busy = false;
+                this.account_failed = result.is_err();
+                if let Err(error) = result {
+                    log::warn!("lyrics: account connection failed: {error:#}");
+                }
+                this.task = None;
+                this.ahead = None;
+                this.ahead_of = None;
+                this.recent.clear();
+                this.forget(cx);
+                this.follow(cx);
+                cx.notify();
+            })
+            .ok();
+        }));
+        cx.notify();
     }
 
     pub fn following(&self) -> Option<&str> {
@@ -145,11 +218,14 @@ impl Lyrics {
     }
 
     pub fn choose(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index >= self.hits.len() || index == self.chosen {
+        if index >= self.hits.len() {
+            return;
+        }
+        self.picked = true;
+        if index == self.chosen {
             return;
         }
         self.chosen = index;
-        self.picked = true;
         self.revision = self.revision.wrapping_add(1);
         cx.notify();
     }
@@ -242,7 +318,20 @@ impl Lyrics {
             .into_iter()
             .filter(|name| *name != LOCAL)
             .collect();
-        format!("{track}:lyrics:{}", services.join(","))
+        let accounts: Vec<String> = self
+            .providers
+            .iter()
+            .filter_map(|provider| {
+                provider
+                    .account_stored()
+                    .map(|stored| format!("{}={stored}", provider.name()))
+            })
+            .collect();
+        format!(
+            "{track}:lyrics:{}:accounts:{}",
+            services.join(","),
+            accounts.join(",")
+        )
     }
 
     fn known(&self, cx: &Context<Self>) -> Vec<&'static str> {
@@ -693,16 +782,14 @@ async fn gather(
     sender: tokio::sync::mpsc::UnboundedSender<Vec<LyricsHit>>,
 ) -> anyhow::Result<()> {
     let mut tasks = JoinSet::new();
+    let mut failure = None;
+    let mut answered = false;
     for provider in providers {
         let query = query.clone();
         tasks.spawn(async move {
-            provider
-                .search(&query)
-                .await
-                .inspect_err(|error| {
-                    log::warn!("lyrics: {} did not answer: {error:#}", provider.name())
-                })
-                .unwrap_or_default()
+            provider.search(&query).await.inspect_err(|error| {
+                log::warn!("lyrics: {} did not answer: {error:#}", provider.name())
+            })
         });
     }
     while !tasks.is_empty() {
@@ -712,10 +799,21 @@ async fn gather(
             _ = sender.closed() => break,
             found = tasks.join_next() => {
                 if let Some(found) = found {
-                    sender.send(found.unwrap_or_default()).ok();
+                    match found {
+                        Ok(Ok(hits)) => {
+                            answered |= !hits.is_empty();
+                            sender.send(hits).ok();
+                        }
+                        Ok(Err(error)) => failure = Some(error),
+                        Err(error) => failure = Some(error.into()),
+                    }
                 }
             }
         }
+    }
+    // A temporary outage must not become a remembered "no lyrics" answer.
+    if !answered && let Some(error) = failure {
+        return Err(error);
     }
     Ok(())
 }

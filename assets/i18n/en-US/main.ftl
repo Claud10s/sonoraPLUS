@@ -827,6 +827,24 @@ toast-library-removed = Removed from your library
 
 # lyrics
 lyrics-title = Lyrics
+floating-lyrics-title = Floating lyrics
+settings-lyrics-account-connect = Connect Spotify Free for lyrics
+settings-lyrics-account-disconnect = Disconnect Spotify lyrics account
+settings-lyrics-account-cancel = Cancel Spotify sign-in
+settings-lyrics-account-detail = Experimental: sign in through your browser to look up lyrics. Your playback service stays the same. Enable Spotify in lyrics sources.
+settings-lyrics-account-failed = Spotify sign-in failed or was cancelled. Try connecting again.
+floating-lyrics-one-line = 1
+floating-lyrics-three-lines = 3
+floating-lyrics-lines = Switch between one and three lyric lines
+floating-lyrics-next-source = Switch to the next available lyrics source
+floating-lyrics-open = Toggle floating lyrics
+floating-lyrics-close = Close floating lyrics
+floating-lyrics-sources = Choose lyrics source
+floating-lyrics-source-option = { $source } — { $quality }
+floating-lyrics-worded = Word-by-word karaoke
+floating-lyrics-synced = Line-synced
+floating-lyrics-plain = Unsynced text
+floating-lyrics-no-sources = No sources available for this song
 lyrics-idle = Play something to see its lyrics
 lyrics-loading = Looking for lyrics…
 lyrics-missing = No lyrics found, sorry!

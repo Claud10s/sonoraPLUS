@@ -767,6 +767,25 @@ toast-library-removed = Quitado de tu biblioteca
 
 # lyrics
 lyrics-title = Letra
+floating-lyrics-title = Letras flotantes
+settings-lyrics-account-connect = Conectar Spotify Free para letras
+settings-lyrics-account-disconnect = Desconectar cuenta de letras de Spotify
+settings-lyrics-account-cancel = Cancelar inicio de sesión de Spotify
+settings-lyrics-account-detail = Experimental: inicia sesión en tu navegador para buscar letras. Tu servicio de reproducción se mantiene. Activa Spotify en las fuentes de letras.
+settings-lyrics-account-failed = La conexión con Spotify falló o se canceló. Intenta conectar de nuevo.
+floating-lyrics-one-line = 1
+floating-lyrics-three-lines = 3
+floating-lyrics-lines = Alternar entre una y tres líneas de letra
+floating-lyrics-next-source = Cambiar a la siguiente fuente de letra disponible
+album-also-like = También te puede gustar
+floating-lyrics-open = Mostrar u ocultar letras flotantes
+floating-lyrics-close = Cerrar letras flotantes
+floating-lyrics-sources = Elegir fuente de la letra
+floating-lyrics-source-option = { $source } — { $quality }
+floating-lyrics-worded = Karaoke palabra por palabra
+floating-lyrics-synced = Sincronizada por líneas
+floating-lyrics-plain = Texto sin sincronización
+floating-lyrics-no-sources = No hay fuentes disponibles para esta canción
 lyrics-idle = Reproduce algo para ver su letra
 lyrics-loading = Buscando la letra…
 lyrics-missing = No se encontró la letra, ¡lo sentimos!

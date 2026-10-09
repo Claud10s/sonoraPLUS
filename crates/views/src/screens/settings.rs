@@ -352,6 +352,8 @@ impl SettingsView {
     ) -> Self {
         let settings = Sonora::global(cx).settings.clone();
         let scrobbling = Sonora::global(cx).scrobbling.clone();
+        cx.observe(&Sonora::global(cx).lyrics.clone(), |_, _, cx| cx.notify())
+            .detach();
         let drm = Sonora::global(cx).drm.clone();
         cx.observe(&drm, |_, _, cx| cx.notify()).detach();
         cx.observe(&session, |_, _, cx| cx.notify()).detach();
@@ -2938,7 +2940,45 @@ impl SettingsView {
             t!("settings-lyrics-providers-detail"),
             theme.muted_foreground,
             theme.text(Text::Small),
-            picker.into_any_element(),
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(picker)
+                .children(Sonora::global(cx).lyrics.read(cx).account("Spotify").map(
+                    |(stored, busy, failed)| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                Button::new("spotify-lyrics-account")
+                                    .label(match (busy, stored) {
+                                        (true, _) => t!("settings-lyrics-account-cancel"),
+                                        (_, true) => t!("settings-lyrics-account-disconnect"),
+                                        _ => t!("settings-lyrics-account-connect"),
+                                    })
+                                    .on_click(cx.listener(|_, _, _, cx| {
+                                        Sonora::global(cx)
+                                            .lyrics
+                                            .clone()
+                                            .update(cx, |lyrics, cx| {
+                                                lyrics.toggle_account("Spotify", cx)
+                                            });
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .text_size(theme.text(Text::Small))
+                                    .text_color(theme.muted_foreground)
+                                    .child(match failed {
+                                        true => t!("settings-lyrics-account-failed"),
+                                        false => t!("settings-lyrics-account-detail"),
+                                    }),
+                            )
+                    },
+                ))
+                .into_any_element(),
         )
     }
 

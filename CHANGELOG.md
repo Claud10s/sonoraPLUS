@@ -7,6 +7,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Connect a separate Spotify Free account from lyrics settings for experimental background
+  lyrics searches while playing music from another service. Spotify playback still requires Premium.
+
+- Open a separate lyrics window from the player bar with synchronized lyrics.
+  On Windows it stays above other applications, even with Sonora minimized.
+- Floating lyrics use a compact artist-and-song header and let you cycle through available
+  lyrics sources without opening a large menu.
+
+### Changed
+
+- Floating lyrics distinguish the artist-and-song header with a softer text color and a
+  separate background, and give the active lyric more visual emphasis.
+- Floating lyrics have a locked compact size with an artist-and-song header and at most three
+  unwrapped lyric lines. Switch to one lyric line for an even smaller window.
+
+### Fixed
+
+- Open floating lyrics directly from the expanded player controls as well as the main player bar.
+- LrcLib requests now time out and retry once on temporary server or connection failures.
+- Failed lyrics lookups are no longer remembered as missing lyrics when no source returns a result.
+- Add the missing Spanish label for album recommendations.
+
 ## [0.42.2] - 2026-10-07
 
 ### Added

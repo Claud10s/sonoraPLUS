@@ -25,7 +25,7 @@ use router::Screen;
 use state::Sonora;
 use ui::ActiveTheme as _;
 use ui::ThemeKind;
-use views::Root;
+use views::{FloatingLyrics, Root};
 
 const LEAST_SIZE: Size<Pixels> = size(px(480.), px(400.));
 const FIRST_SIZE: Size<Pixels> = size(px(920.), px(640.));
@@ -169,6 +169,7 @@ fn main() {
             cx.set_quit_mode(QuitMode::Explicit);
         }
         actions::register(lingers, cx);
+        cx.on_action(|_: &input::ToggleFloatingLyrics, cx| toggle_floating_lyrics(cx));
         memory::watch(cx);
 
         open_window(cx);
@@ -282,7 +283,11 @@ fn percent_decode(value: &str) -> String {
 }
 
 fn show_window(cx: &mut App) {
-    match cx.windows().first() {
+    match cx
+        .windows()
+        .into_iter()
+        .find_map(|window| window.downcast::<Root>())
+    {
         Some(window) => {
             window
                 .update(cx, |_, window, _| window.activate_window())
@@ -294,6 +299,78 @@ fn show_window(cx: &mut App) {
         }
     }
     cx.activate(true);
+}
+
+/// Toggles one lyrics window without replacing the main window or its media handle.
+fn toggle_floating_lyrics(cx: &mut App) {
+    let existing = cx
+        .windows()
+        .into_iter()
+        .find_map(|window| window.downcast::<FloatingLyrics>());
+    if let Some(window) = existing {
+        window
+            .update(cx, |_, window, _| window.remove_window())
+            .ok();
+        return;
+    }
+
+    let bounds = Bounds::centered(None, FloatingLyrics::window_size(cx.theme(), false), cx);
+    let result = cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_min_size: Some(FloatingLyrics::window_size(cx.theme(), true)),
+            titlebar: None,
+            // Windows' PopUp style removes the resize frame. Raise a normal window instead.
+            #[cfg(target_os = "windows")]
+            kind: gpui::WindowKind::Normal,
+            #[cfg(not(target_os = "windows"))]
+            kind: gpui::WindowKind::Floating,
+            is_movable: true,
+            is_resizable: false,
+            app_owns_titlebar_drag: true,
+            app_id: Some("sonora".into()),
+            inactive_frame_interval: Sonora::global(cx).settings.read(cx).saver().interval(),
+            ..Default::default()
+        },
+        |window, cx| {
+            window.set_rem_size(cx.theme().font_size);
+            #[cfg(target_os = "windows")]
+            {
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+                };
+
+                if let Some(handle) = platform_handle(window) {
+                    // This live GPUI window owns the handle; only change its stacking order.
+                    let raised = unsafe {
+                        SetWindowPos(
+                            handle,
+                            HWND_TOPMOST,
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                        )
+                    };
+                    if raised == 0 {
+                        log::warn!(
+                            "lyrics: cannot keep window on top: {}",
+                            std::io::Error::last_os_error()
+                        );
+                    }
+                }
+                set_corner_preference(
+                    window,
+                    Sonora::global(cx).settings.read(cx).window_rounding(),
+                );
+            }
+            cx.new(FloatingLyrics::new)
+        },
+    );
+    if let Err(error) = result {
+        log::error!("lyrics: cannot open floating window: {error:#}");
+    }
 }
 
 fn open_window(cx: &mut App) {

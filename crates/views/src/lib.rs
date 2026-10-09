@@ -1,9 +1,11 @@
 mod chrome;
+mod floating_lyrics;
 mod root;
 mod screens;
 mod shared;
 mod shells;
 
+pub use floating_lyrics::FloatingLyrics;
 pub use root::Root;
 use screens::artist::ArtistView;
 use screens::detail::DetailView;

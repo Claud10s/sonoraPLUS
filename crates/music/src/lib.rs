@@ -331,6 +331,18 @@ pub trait MusicApi: Send + Sync {
 pub trait LyricsProvider: Send + Sync {
     fn name(&self) -> &'static str;
     async fn search(&self, query: &LyricsQuery) -> Result<Vec<LyricsHit>>;
+
+    /// Whether this source offers an account independent of playback.
+    fn account_stored(&self) -> Option<bool> {
+        None
+    }
+    async fn connect_account(&self) -> Result<()> {
+        anyhow::bail!("lyrics account is not supported")
+    }
+    async fn disconnect_account(&self) -> Result<()> {
+        Ok(())
+    }
+    fn cancel_account(&self) {}
 }
 
 /// What an engine is started with. `equalizer` is shared rather than copied: the engine keeps

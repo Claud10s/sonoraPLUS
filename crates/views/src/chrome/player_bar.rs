@@ -219,6 +219,7 @@ impl PlayerBar {
                 "lyrics-title",
                 SideTab::Lyrics,
             ))
+            .child(crate::shared::transport::floating_lyrics_button())
             .child(button(
                 "player-queue",
                 "icons/list-music.svg",

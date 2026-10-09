@@ -26,6 +26,7 @@ actions!(
         ToggleFullscreen,
         ToggleQueue,
         ToggleLyrics,
+        ToggleFloatingLyrics,
         CloseWindow,
         MinimizeWindow,
         ZoomWindow,

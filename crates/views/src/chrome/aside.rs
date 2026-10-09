@@ -275,6 +275,9 @@ pub(crate) struct Aside {
     past_len: usize,
     anchor: bool,
     titled: bool,
+    compact: bool,
+    compact_rows: usize,
+    compact_offset: usize,
     aiming: bool,
     rested: Option<Pixels>,
     since: std::time::Instant,
@@ -369,6 +372,9 @@ impl Aside {
             past_len: 0,
             anchor: true,
             titled: true,
+            compact: false,
+            compact_rows: 3,
+            compact_offset: 0,
             aiming: false,
             rested: None,
             since: std::time::Instant::now(),
@@ -405,6 +411,114 @@ impl Aside {
 
     pub(crate) fn strip(&mut self) {
         self.titled = false;
+    }
+
+    /// Limits the floating surface to one or three unwrapped lyric rows.
+    pub(crate) fn compact(&mut self, rows: usize) {
+        self.compact = true;
+        self.compact_rows = rows.clamp(1, 3);
+    }
+
+    /// Shares the original sheet and playback clock without the full panel's spacing.
+    fn compact_verses(&mut self, window: &mut Window, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let theme = *cx.theme();
+        let playback = self.playback.read(cx);
+        let position = playback.live_position();
+        if playback.state() == &PlaybackState::Playing {
+            window.request_animation_frame();
+        }
+        let lyrics = self.lyrics.read(cx);
+        let following = lyrics.following().map(str::to_owned);
+        if self.verse_of != following || self.verse_take != lyrics.revision() {
+            self.verse_of = following;
+            self.verse_take = lyrics.revision();
+            self.compact_offset = 0;
+        }
+        let mut rows: Vec<(String, bool)> = Vec::new();
+        let mut plain_len = 0;
+        match lyrics.current().map(|hit| &hit.lyrics) {
+            Some(music::Lyrics::Synced { lines }) => {
+                let active = music::lyrics::active(lines, position)
+                    .filter(|index| lines[*index].end.is_none_or(|end| position < end));
+                let next = lines.partition_point(|line| line.start <= position);
+                if self.compact_rows == 1 {
+                    rows.push((
+                        active
+                            .map(|index| lines[index].text.clone())
+                            .unwrap_or_default(),
+                        true,
+                    ));
+                } else {
+                    let start = active.unwrap_or(next).saturating_sub(1);
+                    rows.extend(
+                        lines
+                            .iter()
+                            .enumerate()
+                            .skip(start)
+                            .take(self.compact_rows)
+                            .map(|(index, line)| (line.text.clone(), Some(index) == active)),
+                    );
+                }
+            }
+            Some(music::Lyrics::Plain { text, .. }) => {
+                plain_len = text.lines().count();
+                self.compact_offset = self
+                    .compact_offset
+                    .min(plain_len.saturating_sub(self.compact_rows));
+                rows.extend(
+                    text.lines()
+                        .skip(self.compact_offset)
+                        .take(self.compact_rows)
+                        .map(|line| (line.to_owned(), true)),
+                );
+            }
+            None => {
+                let key = match lyrics.state() {
+                    LyricsState::Idle => "lyrics-idle",
+                    LyricsState::Loading => "lyrics-loading",
+                    LyricsState::Instrumental => "lyrics-instrumental",
+                    LyricsState::Failed(_) => "lyrics-failed",
+                    _ => "lyrics-missing",
+                };
+                rows.push((i18n::lookup(key, None).to_string(), false));
+            }
+        }
+        div()
+            .id("compact-verses")
+            .size_full()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .text_size(theme.text(Text::Body))
+            .on_scroll_wheel(
+                cx.listener(move |this, event: &gpui::ScrollWheelEvent, _, cx| {
+                    let delta = event.delta.pixel_delta(theme.metrics.control_small).y;
+                    if delta < Pixels::ZERO {
+                        this.compact_offset = (this.compact_offset + 1)
+                            .min(plain_len.saturating_sub(this.compact_rows));
+                    } else if delta > Pixels::ZERO {
+                        this.compact_offset = this.compact_offset.saturating_sub(1);
+                    }
+                    cx.notify();
+                }),
+            )
+            .children(rows.into_iter().map(|(text, active)| {
+                div()
+                    .h(theme.metrics.control_small)
+                    .flex_none()
+                    .px_2()
+                    .overflow_hidden()
+                    .line_height(theme.metrics.control_small)
+                    .truncate()
+                    .text_color(if active {
+                        theme.foreground
+                    } else {
+                        theme.muted_foreground
+                    })
+                    .when(active, |this| this.font_weight(FontWeight::MEDIUM))
+                    .child(text)
+            }))
+            .into_any_element()
     }
 
     pub(crate) fn tab(&self) -> SideTab {
@@ -1453,7 +1567,8 @@ impl Aside {
             }
         };
 
-        if state == LyricsState::Ready
+        if !self.compact
+            && state == LyricsState::Ready
             && let Some((source, writers)) = &credit
         {
             let credit = body.len();
@@ -1485,6 +1600,7 @@ impl Aside {
 
         let (over, under) = match &lines {
             Some(lines) => self.verse_slack(lyric_row_count(lines), window, cx),
+            None if self.compact => (theme.metrics.pad, theme.metrics.pad),
             None => (px(REST), px(REST)),
         };
 
@@ -1500,7 +1616,10 @@ impl Aside {
             .pt(over)
             .pb(under)
             .when(effects(), |this| {
-                let fade = verse * VERSE_FADE;
+                let fade = match self.compact {
+                    true => theme.metrics.pad,
+                    false => verse * VERSE_FADE,
+                };
                 this.fade_edges(fade, fade)
             })
             .children(body);
@@ -1533,6 +1652,16 @@ impl Aside {
             .checked_sub(1)
             .and_then(|last| scroll.bounds_for_item(last))
             .map_or(px(0.), |item| item.size.height);
+
+        if self.compact {
+            let first = scroll
+                .bounds_for_item(0)
+                .map_or(px(0.), |item| item.size.height);
+            return (
+                ((view - first) * 0.5).max(px(0.)),
+                ((view - tail) * 0.5).max(px(0.)),
+            );
+        }
 
         (
             snapped((view * PIN).max(px(REST)), window),
@@ -1616,6 +1745,11 @@ impl Aside {
             view.size.height,
             scroll.max_offset().y,
         );
+        let goal = match self.compact {
+            true => (view.origin.y - item.origin.y + (view.size.height - item.size.height) * 0.5)
+                .clamp(-scroll.max_offset().y, px(0.)),
+            false => goal,
+        };
         self.flown(goal, scroll.offset().y);
         match std::mem::take(&mut self.placing) || cx.reduce_motion() {
             true => self.verse_bar.update(cx, |bar, _| bar.place(goal)),
@@ -1801,9 +1935,10 @@ impl Render for Aside {
                     cx.notify();
                 }
             }))
-            .when(self.titled || self.tab == SideTab::Queue, |this| {
-                this.child(self.header(sections, window, cx))
-            })
+            .when(
+                !self.compact && (self.titled || self.tab == SideTab::Queue),
+                |this| this.child(self.header(sections, window, cx)),
+            )
             .child(
                 div()
                     .id("queue-drop")
@@ -1822,7 +1957,10 @@ impl Render for Aside {
                         }))
                     })
                     .when(self.tab == SideTab::Lyrics, |this| {
-                        this.child(self.verses(window, cx))
+                        this.child(match self.compact {
+                            true => self.compact_verses(window, cx),
+                            false => self.verses(window, cx).into_any_element(),
+                        })
                     })
                     .when(self.tab == SideTab::Queue && empty, |this| {
                         this.child(vacant(t!("queue-empty"), cx).flex_1())

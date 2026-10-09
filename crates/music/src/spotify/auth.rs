@@ -92,6 +92,15 @@ fn socket_address(uri: &str) -> Option<String> {
 }
 
 pub async fn restore(config: &AuthConfig) -> Result<Option<Session>> {
+    let restored = restore_lyrics(config).await?;
+    if let Some(session) = &restored {
+        premium(session).await?;
+    }
+    Ok(restored)
+}
+
+/// Restores authentication for metadata and lyrics without enabling Premium playback.
+pub async fn restore_lyrics(config: &AuthConfig) -> Result<Option<Session>> {
     let session = session(config)?;
     let Some(credentials) = session.cache().and_then(|cache| cache.credentials()) else {
         return Ok(None);
@@ -99,16 +108,31 @@ pub async fn restore(config: &AuthConfig) -> Result<Option<Session>> {
 
     session.connect(credentials, true).await.map_err(denied)?;
     credentials::secure(&config.file());
-    premium(&session).await?;
     Ok(Some(session))
 }
 
 pub async fn login(config: &AuthConfig, prompt: PromptSink) -> Result<Session> {
+    let session = login_with_scopes(config, prompt, SCOPES).await?;
+    premium(&session).await?;
+    Ok(session)
+}
+
+/// A separate sign-in for lyrics, with no streaming permission or subscription check.
+pub async fn login_lyrics(config: &AuthConfig, prompt: PromptSink) -> Result<Session> {
+    login_with_scopes(config, prompt, &["user-read-private"]).await
+}
+
+async fn login_with_scopes(
+    config: &AuthConfig,
+    prompt: PromptSink,
+    scopes: &'static [&'static str],
+) -> Result<Session> {
     let client_id = config.client_id.clone();
     let redirect_uri = config.redirect_uri.clone();
 
     let access_token =
-        tokio::task::spawn_blocking(move || authorize(&client_id, &redirect_uri, prompt)).await??;
+        tokio::task::spawn_blocking(move || authorize(&client_id, &redirect_uri, prompt, scopes))
+            .await??;
 
     let session = session(config)?;
     session
@@ -116,11 +140,15 @@ pub async fn login(config: &AuthConfig, prompt: PromptSink) -> Result<Session> {
         .await
         .map_err(denied)?;
     credentials::secure(&config.file());
-    premium(&session).await?;
     Ok(session)
 }
 
-fn authorize(client_id: &str, redirect_uri: &str, prompt: PromptSink) -> Result<String> {
+fn authorize(
+    client_id: &str,
+    redirect_uri: &str,
+    prompt: PromptSink,
+    scopes: &[&str],
+) -> Result<String> {
     let client = BasicClient::new(ClientId::new(client_id.to_owned()))
         .set_auth_uri(AuthUrl::new(
             "https://accounts.spotify.com/authorize".to_owned(),
@@ -130,23 +158,35 @@ fn authorize(client_id: &str, redirect_uri: &str, prompt: PromptSink) -> Result<
         )?)
         .set_redirect_uri(RedirectUrl::new(redirect_uri.to_owned())?);
     let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
-    let scopes = SCOPES.iter().map(|scope| Scope::new((*scope).to_owned()));
-    let (url, _) = client
+    let scopes = scopes.iter().map(|scope| Scope::new((*scope).to_owned()));
+    let (url, state) = client
         .authorize_url(CsrfToken::new_random)
         .add_scopes(scopes)
         .set_pkce_challenge(challenge)
         .url();
-    prompt(SignInPrompt::Url(url.to_string()));
-    open::that_in_background(url.as_str());
-
     let address = socket_address(redirect_uri)
         .with_context(|| format!("redirect URI has no socket address: {redirect_uri}"))?;
     let listener = TcpListener::bind(&address)
         .with_context(|| format!("cannot listen for Spotify login at {address}"))?;
-    let mut stream = listener
-        .incoming()
-        .next()
-        .context("Spotify login callback did not arrive")??;
+    prompt(SignInPrompt::Url(url.to_string()));
+    open::that_in_background(url.as_str());
+    listener.set_nonblocking(true)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+    let mut stream = loop {
+        match listener.accept() {
+            Ok((stream, _)) => break stream,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                anyhow::ensure!(
+                    std::time::Instant::now() < deadline,
+                    "Spotify login callback timed out"
+                );
+                std::thread::sleep(PRODUCT_POLL);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+    stream.set_nonblocking(false)?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
     let mut request = String::new();
     BufReader::new(&stream).read_line(&mut request)?;
     let target = request
@@ -170,6 +210,10 @@ fn authorize(client_id: &str, redirect_uri: &str, prompt: PromptSink) -> Result<
         };
         return Err(SignInFailure(problem).into());
     }
+    anyhow::ensure!(
+        query.get("state").map(|value| value.as_ref()) == Some(state.secret().as_str()),
+        "Spotify login callback state did not match"
+    );
     let code = query
         .get("code")
         .context("Spotify login callback had no authorization code")?;
@@ -184,7 +228,10 @@ fn authorize(client_id: &str, redirect_uri: &str, prompt: PromptSink) -> Result<
 /// Carries one oauth2 request over reqwest. oauth2 only knows the reqwest it was built against,
 /// so the workspace one is handed in as a plain function instead.
 fn exchange(request: oauth2::HttpRequest) -> Result<oauth2::HttpResponse, reqwest::Error> {
-    let sent = reqwest::blocking::Client::new().execute(request.try_into()?)?;
+    let sent = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()?
+        .execute(request.try_into()?)?;
     let status = sent.status();
     let headers = sent.headers().clone();
     let mut response = http::Response::new(sent.bytes()?.to_vec());
