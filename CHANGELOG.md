@@ -26,6 +26,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Windows development builds open without an extra console window.
 - The Spotify lyrics account controls have their own settings block, with readable wrapped instructions and no overlap with the next setting.
 - Spotify lyrics sign-in now requests the permission required by librespot to establish a session.
 - Open floating lyrics directly from the expanded player controls as well as the main player bar.

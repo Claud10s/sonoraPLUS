@@ -1,3 +1,16 @@
+## sonoraPLUS para Windows
+
+Variante de Sonora con letras flotantes y mejoras propias, basada en Sonora 0.43.0.
+
+- [Descargar sonoraPLUS para Windows de 64 bits (.exe)](https://github.com/Claud10s/sonoraPLUS/releases/latest/download/SonoraPLUS.exe)
+- [Descargar el paquete con las licencias (.zip)](https://github.com/Claud10s/sonoraPLUS/releases/latest/download/SonoraPLUS-Windows-x64.zip)
+- [Ver versiones y notas de publicación](https://github.com/Claud10s/sonoraPLUS/releases)
+
+Cierra la versión anterior y abre `SonoraPLUS.exe`. No requiere instalador y abre sin terminal.
+La conexión independiente de Spotify para letras es experimental y su acceso aún no está validado.
+
+---
+
 <div align="center">
 
 <img src="./.github/readme-icon.svg" alt="" width="60" height="60">
