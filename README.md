@@ -101,7 +101,8 @@ instead, which takes a while on a Rust and GPUI tree but links against your own 
 yay -S sonora
 ```
 
-Either `pipewire-alsa` or `pulseaudio-alsa` is required, matching your sound server.
+Either `pipewire-alsa` or `pulseaudio-alsa` is required, matching your sound server. Sonora
+warns you at startup when the one your sound server needs is missing.
 
 #### Flatpak
 

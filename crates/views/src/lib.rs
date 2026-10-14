@@ -6,6 +6,9 @@ mod shared;
 mod shells;
 
 pub use floating_lyrics::FloatingLyrics;
+
+#[cfg(target_os = "macos")]
+pub use chrome::traffic_lights;
 pub use root::Root;
 use screens::artist::ArtistView;
 use screens::detail::DetailView;

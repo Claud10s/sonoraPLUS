@@ -101,7 +101,9 @@ impl Render for FloatingLyrics {
             .size_full()
             .bg(theme.background)
             .text_color(theme.foreground)
-            .font(crate::root::ui_font(cx))
+            .font(crate::root::ui_font(
+                Sonora::global(cx).settings.read(cx).font(),
+            ))
             .on_action(|_: &CloseWindow, window, _| window.remove_window())
             .on_action(|_: &MinimizeWindow, window, _| window.minimize_window())
             .on_action(|_: &ZoomWindow, _, _| {})
