@@ -180,6 +180,7 @@ enum Slot {
     EqualizerPreset,
     EqualizerBands,
     LyricsProviders,
+    LyricsAccount,
     PreferLocalLyrics,
     Karaoke,
     Romanized,
@@ -478,7 +479,7 @@ impl SettingsView {
         cx.notify();
     }
 
-    /// Takes the rows' measured width, which only the Widevine row's height depends on.
+    /// Takes the rows' measured width, used to measure rows with wrapped explanations.
     fn set_column(&mut self, width: Pixels, cx: &mut Context<Self>) {
         if self.column == Some(width) {
             return;
@@ -631,6 +632,14 @@ impl SettingsView {
                     slots.push(Slot::EqualizerBands);
                 }
                 slots.extend([Slot::Title("settings-group-lyrics"), Slot::LyricsProviders]);
+                if Sonora::global(cx)
+                    .lyrics
+                    .read(cx)
+                    .account("Spotify")
+                    .is_some()
+                {
+                    slots.push(Slot::LyricsAccount);
+                }
                 if self
                     .settings
                     .read(cx)
@@ -796,6 +805,10 @@ impl SettingsView {
                 t!("settings-lyrics-providers"),
                 t!("settings-lyrics-providers-detail"),
             ),
+            Slot::LyricsAccount => (
+                t!("settings-lyrics-account-title"),
+                self.lyrics_account_detail(cx),
+            ),
             Slot::PreferLocalLyrics => (
                 t!("settings-prefer-local-lyrics"),
                 t!("settings-prefer-local-lyrics-detail"),
@@ -884,6 +897,31 @@ impl SettingsView {
                 window,
             ),
             Slot::Widevine => snapped(self.widevine_height(&theme, window, cx), window),
+            Slot::LyricsAccount => {
+                let width = self.column.unwrap_or(WIDTH);
+                let title_lines = wrapped_lines(
+                    t!("settings-lyrics-account-title"),
+                    theme.text(Text::Body),
+                    width,
+                    window,
+                );
+                let detail_lines = wrapped_lines(
+                    self.lyrics_account_detail(cx),
+                    theme.text(Text::Small),
+                    width,
+                    window,
+                );
+                snapped(
+                    SECTION_GAP
+                        + line(&theme, Text::Body) * title_lines as f32
+                        + BLOCK_GAP
+                        + line(&theme, Text::Small) * detail_lines as f32
+                        + BLOCK_GAP
+                        + theme.metrics.control
+                        + SECTION_GAP,
+                    window,
+                )
+            }
             _ => snapped(standard_height(&theme), window),
         }
     }
@@ -1003,6 +1041,7 @@ impl SettingsView {
             Slot::EqualizerPreset => self.equalizer_preset_row(cx).element,
             Slot::EqualizerBands => self.equalizer_bands_row(cx).element,
             Slot::LyricsProviders => self.lyrics_providers_row(cx).element,
+            Slot::LyricsAccount => self.lyrics_account_row(cx).element,
             Slot::PreferLocalLyrics => self.prefer_local_lyrics_row(cx).element,
             Slot::Karaoke => self.karaoke_lyrics_row(cx).element,
             Slot::Romanized => self.romanized_lyrics_row(cx).element,
@@ -2977,48 +3016,80 @@ impl SettingsView {
             t!("settings-lyrics-providers-detail"),
             theme.muted_foreground,
             theme.text(Text::Small),
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(picker)
-                .children(Sonora::global(cx).lyrics.read(cx).account("Spotify").map(
-                    |(stored, busy, failed)| {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                Button::new("spotify-lyrics-account")
-                                    .label(match (busy, stored) {
-                                        (true, _) => t!("settings-lyrics-account-cancel"),
-                                        (_, true) => t!("settings-lyrics-account-disconnect"),
-                                        _ => t!("settings-lyrics-account-connect"),
-                                    })
-                                    .on_click(cx.listener(|_, _, _, cx| {
-                                        Sonora::global(cx)
-                                            .lyrics
-                                            .clone()
-                                            .update(cx, |lyrics, cx| {
-                                                lyrics.toggle_account("Spotify", cx)
-                                            });
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .text_size(theme.text(Text::Small))
-                                    .text_color(theme.muted_foreground)
-                                    .child(match failed {
-                                        true => t!("settings-lyrics-account-failed"),
-                                        false => t!("settings-lyrics-account-detail"),
-                                    }),
-                            )
-                    },
-                ))
-                .into_any_element(),
+            picker.into_any_element(),
         )
     }
 
+    /// The full account explanation, also used to measure the virtualized row and search it.
+    fn lyrics_account_detail(&self, cx: &App) -> SharedString {
+        let failed = Sonora::global(cx)
+            .lyrics
+            .read(cx)
+            .account("Spotify")
+            .is_some_and(|(_, _, failed)| failed);
+        match failed {
+            true => t!("settings-lyrics-account-failed"),
+            false => t!("settings-lyrics-account-detail"),
+        }
+    }
+
+    /// A separate full-width account block whose wrapped text matches its deck height.
+    fn lyrics_account_row(&self, cx: &mut Context<Self>) -> Setting {
+        let theme = *cx.theme();
+        let title = t!("settings-lyrics-account-title");
+        let detail = self.lyrics_account_detail(cx);
+        let (stored, busy, _) = Sonora::global(cx)
+            .lyrics
+            .read(cx)
+            .account("Spotify")
+            .unwrap_or_default();
+        let element = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .py_3()
+            .child(
+                div()
+                    .w_full()
+                    .flex_none()
+                    .line_height(relative(LEADING))
+                    .text_size(theme.text(Text::Body))
+                    .child(title.clone()),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex_none()
+                    .line_height(relative(LEADING))
+                    .text_size(theme.text(Text::Small))
+                    .text_color(theme.muted_foreground)
+                    .child(detail.clone()),
+            )
+            .child(
+                Button::new("spotify-lyrics-account")
+                    .w_full()
+                    .flex_none()
+                    .outline()
+                    .label(match (busy, stored) {
+                        (true, _) => t!("settings-lyrics-account-cancel"),
+                        (_, true) => t!("settings-lyrics-account-disconnect"),
+                        _ => t!("settings-lyrics-account-connect"),
+                    })
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        Sonora::global(cx)
+                            .lyrics
+                            .clone()
+                            .update(cx, |lyrics, cx| lyrics.toggle_account("Spotify", cx));
+                    })),
+            )
+            .into_any_element();
+        Setting {
+            title,
+            detail,
+            element,
+        }
+    }
     fn prefer_local_lyrics_row(&self, cx: &mut Context<Self>) -> Setting {
         let theme = *cx.theme();
         let muted = theme.muted_foreground;

@@ -117,9 +117,10 @@ pub async fn login(config: &AuthConfig, prompt: PromptSink) -> Result<Session> {
     Ok(session)
 }
 
-/// A separate sign-in for lyrics, with no streaming permission or subscription check.
+/// A separate sign-in for lyrics without the playback subscription check.
+/// Librespot still requires the streaming scope to exchange the token for a session.
 pub async fn login_lyrics(config: &AuthConfig, prompt: PromptSink) -> Result<Session> {
-    login_with_scopes(config, prompt, &["user-read-private"]).await
+    login_with_scopes(config, prompt, &["streaming", "user-read-private"]).await
 }
 
 async fn login_with_scopes(
@@ -134,12 +135,14 @@ async fn login_with_scopes(
         tokio::task::spawn_blocking(move || authorize(&client_id, &redirect_uri, prompt, scopes))
             .await??;
 
+    log::debug!("auth: Spotify browser authorization completed; connecting session");
     let session = session(config)?;
     session
         .connect(Credentials::with_access_token(access_token), true)
         .await
         .map_err(denied)?;
     credentials::secure(&config.file());
+    log::debug!("auth: Spotify session connected");
     Ok(session)
 }
 

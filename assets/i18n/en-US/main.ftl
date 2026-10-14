@@ -828,10 +828,11 @@ toast-library-removed = Removed from your library
 # lyrics
 lyrics-title = Lyrics
 floating-lyrics-title = Floating lyrics
-settings-lyrics-account-connect = Connect Spotify Free for lyrics
-settings-lyrics-account-disconnect = Disconnect Spotify lyrics account
+settings-lyrics-account-title = Spotify account for lyrics
+settings-lyrics-account-connect = Connect Spotify
+settings-lyrics-account-disconnect = Disconnect account
 settings-lyrics-account-cancel = Cancel Spotify sign-in
-settings-lyrics-account-detail = Experimental: sign in through your browser to look up lyrics. Your playback service stays the same. Enable Spotify in lyrics sources.
+settings-lyrics-account-detail = Experimental: connect a separate account to look up lyrics. Availability depends on the access Spotify grants your account. Your playback service stays the same. Enable Spotify in lyrics sources.
 settings-lyrics-account-failed = Spotify sign-in failed or was cancelled. Try connecting again.
 floating-lyrics-one-line = 1
 floating-lyrics-three-lines = 3

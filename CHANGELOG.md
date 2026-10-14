@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Connect a separate Spotify Free account from lyrics settings for experimental background
+- Connect a separate Spotify account from lyrics settings for experimental background
   lyrics searches while playing music from another service. Spotify playback still requires Premium.
 
 - Open a separate lyrics window from the player bar with synchronized lyrics.
@@ -26,6 +26,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The Spotify lyrics account controls have their own settings block, with readable wrapped instructions and no overlap with the next setting.
+- Spotify lyrics sign-in now requests the permission required by librespot to establish a session.
 - Open floating lyrics directly from the expanded player controls as well as the main player bar.
 - LrcLib requests now time out and retry once on temporary server or connection failures.
 - Failed lyrics lookups are no longer remembered as missing lyrics when no source returns a result.

@@ -768,10 +768,11 @@ toast-library-removed = Quitado de tu biblioteca
 # lyrics
 lyrics-title = Letra
 floating-lyrics-title = Letras flotantes
-settings-lyrics-account-connect = Conectar Spotify Free para letras
-settings-lyrics-account-disconnect = Desconectar cuenta de letras de Spotify
-settings-lyrics-account-cancel = Cancelar inicio de sesión de Spotify
-settings-lyrics-account-detail = Experimental: inicia sesión en tu navegador para buscar letras. Tu servicio de reproducción se mantiene. Activa Spotify en las fuentes de letras.
+settings-lyrics-account-title = Cuenta de Spotify para letras
+settings-lyrics-account-connect = Conectar Spotify
+settings-lyrics-account-disconnect = Desconectar cuenta
+settings-lyrics-account-cancel = Cancelar conexión
+settings-lyrics-account-detail = Experimental: conecta una cuenta separada para buscar letras. La disponibilidad depende del acceso que permita Spotify a tu cuenta. Tu servicio de reproducción se mantiene. Activa Spotify en las fuentes de letras.
 settings-lyrics-account-failed = La conexión con Spotify falló o se canceló. Intenta conectar de nuevo.
 floating-lyrics-one-line = 1
 floating-lyrics-three-lines = 3
