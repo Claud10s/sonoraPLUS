@@ -7547,6 +7547,7 @@ dependencies = [
  "dirs",
  "discord-rich-presence",
  "fastrand",
+ "flate2",
  "futures",
  "gpui",
  "i18n",
@@ -7566,6 +7567,7 @@ dependencies = [
  "sha2",
  "souvlaki",
  "storage",
+ "tempfile",
  "tokio",
  "ui",
  "webview",
@@ -9005,6 +9007,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 name = "views"
 version = "0.43.0"
 dependencies = [
+ "anyhow",
  "gpui",
  "i18n",
  "icons",

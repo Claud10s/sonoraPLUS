@@ -27,6 +27,8 @@ actions!(
         ToggleQueue,
         ToggleLyrics,
         ToggleFloatingLyrics,
+        OpenLyricsMonitor,
+        CaptureLyricTime,
         CloseWindow,
         MinimizeWindow,
         ZoomWindow,
@@ -67,6 +69,10 @@ fn shared() -> Vec<KeyBinding> {
     let results = format!("{SEARCH_CONTEXT} && !{INPUT_CONTEXT}");
 
     vec![
+        KeyBinding::new("ctrl-enter", CaptureLyricTime, Some("LyricsMonitor")),
+        KeyBinding::new("cmd-enter", CaptureLyricTime, Some("LyricsMonitor")),
+        KeyBinding::new("ctrl-shift-l", OpenLyricsMonitor, None),
+        KeyBinding::new("cmd-shift-l", OpenLyricsMonitor, None),
         KeyBinding::new("down", SelectNext, table),
         KeyBinding::new("up", SelectPrevious, table),
         KeyBinding::new("shift-down", SelectNext, table),

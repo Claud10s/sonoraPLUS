@@ -5,13 +5,15 @@ use input::{CloseWindow, MinimizeWindow, ZoomWindow};
 use state::{Lyrics, Playback, SideTab, Sonora};
 use ui::{ActiveTheme as _, Button};
 
-use crate::chrome::Aside;
+use crate::chrome::{Aside, LYRICS_SOURCES, lyrics_sources};
 
 /// A separate compact lyrics surface sharing the main player's timing and sources.
 pub struct FloatingLyrics {
     aside: Entity<Aside>,
     playback: Entity<Playback>,
     lyrics: Entity<Lyrics>,
+    sources: ui::Popovers,
+    source_scrollbar: Entity<ui::Scrollbar>,
     grabbed: bool,
     single_line: bool,
 }
@@ -39,6 +41,8 @@ impl FloatingLyrics {
             aside,
             playback,
             lyrics,
+            sources: ui::Popovers::default(),
+            source_scrollbar: cx.new(|_| ui::Scrollbar::new(gpui::ScrollHandle::new())),
             grabbed: false,
             single_line: false,
         }
@@ -51,35 +55,16 @@ impl FloatingLyrics {
             theme.metrics.control_small * if single_line { 2. } else { 4. },
         )
     }
-
-    /// Cycles available sources without opening a menu taller than the locked window.
-    fn sources(&self, cx: &mut Context<Self>) -> Button {
-        Button::new("floating-lyrics-sources")
-            .ghost()
-            .small()
-            .icon("icons/list-music.svg")
-            .tooltip("floating-lyrics-next-source")
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.lyrics.update(cx, |lyrics, cx| {
-                    let count = lyrics.hits().len();
-                    if count == 0 {
-                        return;
-                    }
-                    let current = lyrics
-                        .current()
-                        .and_then(|hit| lyrics.hits().iter().position(|candidate| candidate == hit))
-                        .unwrap_or(0);
-                    lyrics.choose((current + 1) % count, cx);
-                });
-            }))
-    }
 }
 
 impl Render for FloatingLyrics {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = *cx.theme();
         window.set_rem_size(theme.font_size);
-        let footprint = Self::window_size(&theme, self.single_line);
+        let mut footprint = Self::window_size(&theme, self.single_line);
+        if self.sources.shows(LYRICS_SOURCES) {
+            footprint.height += theme.metrics.control * 8.;
+        }
         if window.viewport_size() != footprint {
             window.resize(footprint);
         }
@@ -139,7 +124,12 @@ impl Render for FloatingLyrics {
                                 }
                             })),
                     )
-                    .child(self.sources(cx))
+                    .child(lyrics_sources(
+                        &self.lyrics,
+                        &self.sources,
+                        &self.source_scrollbar,
+                        cx,
+                    ))
                     .child(
                         Button::new("floating-lyrics-lines")
                             .ghost()

@@ -27,6 +27,8 @@ const SAVE_DELAY: Duration = Duration::from_millis(800);
 const RECENT: usize = 16;
 
 pub struct Lyrics {
+    book: Entity<crate::LyricBook>,
+    book_generation: u64,
     state: LyricsState,
     hits: Vec<LyricsHit>,
     chosen: usize,
@@ -65,10 +67,24 @@ impl Lyrics {
         queue: Entity<Queue>,
         session: Entity<Session>,
         settings: Entity<AppSettings>,
-        providers: Vec<Arc<dyn LyricsProvider>>,
+        sources: (Vec<Arc<dyn LyricsProvider>>, Entity<crate::LyricBook>),
         io: Io,
         cx: &mut Context<Self>,
     ) -> Self {
+        let (providers, book) = sources;
+        cx.observe(&book, |this, book, cx| {
+            let generation = book.read(cx).generation;
+            if generation == this.book_generation {
+                return;
+            }
+            this.book_generation = generation;
+            this.task = None;
+            this.ahead = None;
+            this.ahead_of = None;
+            this.forget(cx);
+            this.follow(cx);
+        })
+        .detach();
         cx.observe(&playback, |this, _, cx| this.follow(cx))
             .detach();
         cx.observe(&queue, |this, _, cx| this.prefetch(cx)).detach();
@@ -101,6 +117,8 @@ impl Lyrics {
             .background_executor()
             .spawn(async move { moving.migrate() });
         Self {
+            book,
+            book_generation: 0,
             state: LyricsState::Idle,
             hits: Vec::new(),
             chosen: 0,
@@ -225,6 +243,19 @@ impl Lyrics {
             return;
         }
         self.chosen = index;
+        if let Some(hit) = self
+            .current()
+            .filter(|hit| hit.source != crate::PERSONAL_LYRICS)
+            .cloned()
+            && let Some(track) = self.playback.read(cx).track().cloned()
+            && let Some(id) = track.id.as_deref()
+            && let Some(provider) = self.session.read(cx).slug_for(id)
+        {
+            let key = crate::lyric_book::track_key(provider, id);
+            self.book.update(cx, |book, cx| {
+                book.save(key, hit.lyrics, hit.source.into(), cx)
+            });
+        }
         self.revision = self.revision.wrapping_add(1);
         cx.notify();
     }
@@ -253,18 +284,7 @@ impl Lyrics {
         self.settled = false;
         self.revision = self.revision.wrapping_add(1);
 
-        // A file's own lyrics are never cached, so an edit to its tags shows on the next play.
-        if !self.reads_file(&id, cx)
-            && let Some(found) = self.recall(&id)
-            && self
-                .asked(&id, cx)
-                .iter()
-                .all(|provider| found.covers(provider))
-        {
-            let query = self.query(&track, &id, cx);
-            self.show(&found, &query, cx);
-            return;
-        }
+        // The permanent library is checked before memory and provider caches on every play.
         self.load(id, track, cx);
     }
 
@@ -435,10 +455,19 @@ impl Lyrics {
         self.ahead = Some(self.fetch(id, track, cx));
     }
 
-    /// Looks a track up: in memory, then in the cache database, then with the providers. Only
+    /// Looks a track up in the permanent library, memory, cache, then with the providers. Only
     /// the services that have not answered for this track yet are asked, and a file's own lyrics
     /// are read again on every play. What the cache holds is shown alongside the new answers.
     fn fetch(&mut self, id: String, track: Track, cx: &mut Context<Self>) -> Task<()> {
+        let personal = self.book.read(cx).store.clone();
+        let book = self.book.clone();
+        let provider_slug = self
+            .session
+            .read(cx)
+            .slug_for(&id)
+            .unwrap_or_default()
+            .to_owned();
+        let personal_key = crate::lyric_book::track_key(&provider_slug, &id);
         let settings = self.settings.read(cx);
         let prefer_local = settings.prefer_local_lyrics();
         let enabled: Vec<&'static str> = self
@@ -453,16 +482,104 @@ impl Lyrics {
         let query = self.query(&track, &id, cx);
         let io = self.io.clone();
         cx.spawn(async move |this, cx| {
+            let saved = cx
+                .background_executor()
+                .spawn(async move {
+                    personal
+                        .read()
+                        .map(|data| data.current(&personal_key).cloned())
+                })
+                .await;
             let cached = match stored {
                 Some(stored) => stored.await,
                 None => remembered,
             };
+            match saved {
+                Ok(Some(revision)) => {
+                    if let Some(cached) = &cached {
+                        let held = crate::lyric_book::retained_answers(
+                            &query,
+                            cached
+                                .hits
+                                .iter()
+                                .filter(|hit| enabled.contains(&hit.source))
+                                .cloned()
+                                .collect(),
+                        );
+                        if !held.is_empty() {
+                            book.update(cx, |book, cx| {
+                                book.record_answers(
+                                    provider_slug.clone(),
+                                    track.clone(),
+                                    held,
+                                    false,
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                    this.update(cx, |this, cx| {
+                        if this.finished(&id) {
+                            this.hits = vec![LyricsHit {
+                                source: crate::PERSONAL_LYRICS,
+                                trust: 100,
+                                lyrics: revision.sheet,
+                                instrumental: false,
+                                title: track.name.clone(),
+                                artist: track.artists.clone(),
+                                album: Some(track.album.clone()),
+                                duration: Some(track.duration),
+                                writers: vec![],
+                            }];
+                            if let Some(cached) = &cached {
+                                this.hits.extend(
+                                    cached
+                                        .hits
+                                        .iter()
+                                        .filter(|hit| {
+                                            enabled.contains(&hit.source) && !hit.lyrics.is_empty()
+                                        })
+                                        .cloned(),
+                                );
+                            }
+                            this.chosen = 0;
+                            this.settled = true;
+                            this.state = LyricsState::Ready;
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+                    return;
+                }
+                Err(error) => {
+                    log::warn!("lyrics: cannot read personal library: {error:#}");
+                }
+                Ok(None) => {}
+            }
             if let Some(found) = &cached {
                 let held = found.clone();
                 let id = id.clone();
                 this.update(cx, |this, _| this.hold(id, held)).ok();
             }
             let cached = cached.unwrap_or_default();
+            if !cached.hits.is_empty() {
+                let held = crate::lyric_book::retained_answers(
+                    &query,
+                    cached
+                        .hits
+                        .iter()
+                        .filter(|hit| enabled.contains(&hit.source))
+                        .cloned()
+                        .collect(),
+                );
+                let provider = provider_slug.clone();
+                let metadata = track.clone();
+                if !held.is_empty() {
+                    book.update(cx, |book, cx| {
+                        book.record_answers(provider, metadata, held, false, cx)
+                    });
+                }
+            }
             let mut providers: Vec<Arc<dyn LyricsProvider>> = asked
                 .into_iter()
                 .filter(|provider| !cached.covers(provider))
@@ -494,6 +611,10 @@ impl Lyrics {
                     Vec::new()
                 });
                 if hits.iter().any(|hit| music::lyrics::eligible(&query, hit)) {
+                    let kept = crate::lyric_book::retained_answers(&query, hits.clone());
+                    book.update(cx, |book, cx| {
+                        book.record_answers(provider_slug.clone(), track.clone(), kept, false, cx)
+                    });
                     let found = Found {
                         hits,
                         answered: Vec::new(),
@@ -520,6 +641,7 @@ impl Lyrics {
                 sender.send(held).ok();
             }
             let ranking = query.clone();
+            let expected_answers = providers.len();
             let worker = io.spawn(async move { gather(providers, query, sender).await });
             let mut hits = Vec::new();
             let mut displayed: Option<LyricsHit> = None;
@@ -547,6 +669,18 @@ impl Lyrics {
             }
 
             let answered = join(worker).await;
+
+            if answered.as_ref().is_ok_and(|answered| {
+                !hits.is_empty() || (expected_answers > 0 && answered.len() == expected_answers)
+            }) {
+                let instrumental = music::lyrics::instrumental(&query_for(&track, None), &hits);
+                let kept =
+                    crate::lyric_book::retained_answers(&query_for(&track, None), hits.clone());
+                let metadata = track.clone();
+                book.update(cx, |book, cx| {
+                    book.record_answers(provider_slug, metadata, kept, instrumental, cx)
+                });
+            }
 
             this.update(cx, |this, cx| {
                 let current = this.finished(&id);

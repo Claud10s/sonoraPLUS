@@ -172,6 +172,7 @@ fn main() {
         }
         actions::register(lingers, cx);
         cx.on_action(|_: &input::ToggleFloatingLyrics, cx| toggle_floating_lyrics(cx));
+        cx.on_action(|_: &input::OpenLyricsMonitor, cx| views::LyricsMonitor::open(cx));
         memory::watch(cx);
 
         open_window(cx);
@@ -395,6 +396,7 @@ fn open_window(cx: &mut App) {
         updates: _,
         usage: _,
         wake: _,
+        lyric_book: _,
     } = Sonora::global(cx);
     let (session, library, playback, queue) = (
         session.clone(),

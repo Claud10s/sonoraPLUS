@@ -827,6 +827,94 @@ toast-library-removed = Removed from your library
 
 # lyrics
 lyrics-title = Lyrics
+book-title = Lyrics library and listening monitor
+book-personal = Saved locally
+book-personal-source = Local · { $source }
+book-imported-source = Imported
+book-edited-source = Edited by you
+book-search = Search songs, artists or platforms
+book-line-text = Lyric line
+book-time = mm:ss.mmm
+book-all = All songs
+book-missing = No saved lyrics
+book-plain = Plain lyrics
+book-conflicts = Conflicting revisions
+book-previous = Previous
+book-next = Next
+book-count = { $count ->
+    [one] One song
+   *[other] { $count } songs
+    }
+book-row = { $provider } · Listens: { $count } · Linked song total: { $total } · Previous starts: { $previous }
+book-last-played = Last listened: { $time }
+book-never = No qualified listens yet
+book-not-found = Not found
+book-unchecked = Not checked
+book-backed-up = In latest backup
+book-local = Local
+book-not-saved = Not saved
+book-edit = Open editor
+book-close-editor = Back to the list
+book-use-reference = Use as reference
+book-select-song = Choose a song to import, edit or synchronize its lyrics.
+book-origin = Original source: { $source }
+book-play = Play this version
+book-pause = Pause / resume
+book-find = Search providers
+book-import = Import TXT / LRC / JSON
+book-export = Export saved lyrics
+book-paste = Paste lyrics
+book-discard = Discard draft / load saved
+book-reference = Reference: { $title } ({ $provider })
+book-link = Link as the same song
+book-copy-text = Copy reference text only
+book-copy-timing = Copy reference with timing
+book-unlink = Separate this version
+book-editor-help = Paste or import lyrics, then mark each line as it starts. Use Words to capture individual words. Times can be edited as mm:ss.mmm. Copy timing only after checking that both recordings match.
+book-stamp = Mark next line / word now
+book-earlier = Earlier −0.1 s
+book-later = Later +0.1 s
+book-restart-stamps = Restart line capture
+book-add-line = Add line
+book-save = Save lyrics and timing
+book-save-plain = Save as plain text
+book-capture-position = Next line: { $line } · Player: { $time }
+book-words = Build word timing
+book-remove-line = Remove line
+book-capture-word = Mark word now
+book-versions = { $count ->
+    [one] One saved revision
+   *[other] { $count } saved revisions
+    }
+book-conflict-help = This song has differing revisions. Choose the one to keep; previous revisions remain available.
+book-version = Keep { $source } · { $time } · { $kind }
+book-cloud-help = Create a compressed .json.gz file containing your lyrics, timing and revisions. Save it in a Google Drive or OneDrive folder, or upload it through their website. To restore it, select the file in a synced folder or download it first. Sonora requests no cloud permissions and makes no automatic cloud connections or backups. Loading a backup adds missing revisions and keeps your local selection.
+book-cloud = Lyrics backups
+book-guide = How to use
+book-folder = Lyrics folder
+book-folder-choose = Choose lyrics folder…
+book-folder-refresh = Save missing files
+book-folder-path = File library: { $path }
+book-folder-error = Some lyrics files could not be saved. The internal library is preserved. Check the folder and choose Save missing files.
+book-folder-help = Received lyrics and their alternatives are automatically retained in Documents/SonoraLetras, or the folder you choose. Sonora creates TXT for plain text, LRC for timed lyrics, and JSON to preserve every detail. Existing files and your selected lyrics are kept. Save missing files restores deleted copies; to use changes made outside Sonora, import the file in the editor.
+book-now = Current song
+book-loading = Loading the permanent library…
+book-working = Working…
+book-error = The operation failed. Your saved lyrics are preserved. Check the application log and retry.
+book-count-rule = A listen counts after 30 seconds of playback, or half the track for songs shorter than one minute. Previous starts are imported from the retained history and are shown separately. Linked versions share a total, never timing automatically.
+book-unsaved = Save or discard your draft before switching songs or loading another version.
+book-invalid = The lyrics are empty, unreadable or too large.
+book-invalid-times = Check every line and word timestamp. Times must increase and words must match the line text.
+book-play-selected = Play this exact song version before capturing timestamps.
+book-reload-after-import = When the operation finishes, use Load saved to edit the saved lyrics.
+book-saving = Saving… Wait for the operation to finish before closing Sonora.
+book-saved = Lyrics saved locally.
+lyrics-select-source = Choose lyrics source
+lyrics-no-sources = No lyrics sources available for this song yet
+lyrics-kind-words = Word-synced
+lyrics-kind-lines = Line-synced
+lyrics-kind-plain = Plain text
+lyrics-source-option = { $source } · { $kind }
 floating-lyrics-title = Floating lyrics
 settings-lyrics-account-title = Spotify account for lyrics
 settings-lyrics-account-connect = Connect Spotify
@@ -925,3 +1013,9 @@ toast-tray-unavailable = There is no system tray to put the icon in
 
 # power
 wake-reason = Music is playing
+
+book-backup = Create compressed backup…
+book-restore = Load backup…
+book-backup-created = Backup created. You can upload this file to your cloud whenever you want.
+book-backup-restored = Backup loaded. Missing revisions were added and local selections were kept.
+book-backup-last = Latest backup file: { $path } · Created: { $time }

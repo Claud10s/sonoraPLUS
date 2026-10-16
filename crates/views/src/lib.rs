@@ -1,11 +1,13 @@
 mod chrome;
 mod floating_lyrics;
+mod lyrics_monitor;
 mod root;
 mod screens;
 mod shared;
 mod shells;
 
 pub use floating_lyrics::FloatingLyrics;
+pub use lyrics_monitor::LyricsMonitor;
 
 #[cfg(target_os = "macos")]
 pub use chrome::traffic_lights;

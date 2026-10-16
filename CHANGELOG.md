@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Automatically keep received lyrics and provider alternatives as TXT/LRC and lossless JSON
+  files in Documents/SonoraLetras or a chosen folder, without replacing existing files.
+- Keep a permanent local lyrics library ahead of provider lookups, with a listening monitor,
+  per-publication counts, manual version linking, imports, exports, and line or word timing edits.
+- Export and load compressed lyrics backups for manual storage in Google Drive, OneDrive, or
+  any folder, without connecting cloud accounts. Loading preserves local choices and previous revisions.
+
+- See the current lyrics source and choose another available answer, with its synchronization
+  type, in the lyrics panel, fullscreen view, and floating window.
+
 - Connect a separate Spotify account from lyrics settings for experimental background
   lyrics searches while playing music from another service. Spotify playback still requires Premium.
 
@@ -19,6 +29,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Keep lyrics monitor instructions in a collapsible information guide, hidden by default.
 - Floating lyrics distinguish the artist-and-song header with a softer text color and a
   separate background, and give the active lyric more visual emphasis.
 - Floating lyrics have a locked compact size with an artist-and-song header and at most three

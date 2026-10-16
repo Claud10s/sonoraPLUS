@@ -9,6 +9,7 @@ mod history;
 mod home;
 mod library;
 mod logging;
+mod lyric_book;
 mod lyrics;
 mod mosaic;
 mod network;
@@ -45,6 +46,10 @@ pub use library::{
     Addition, Library, LibraryEvent, LibraryPart, LibraryState, Problem, Ready, Shelf,
 };
 pub use logging::log_file;
+pub use lyric_book::{
+    BookData, BookTrack, LyricBook, PERSONAL_LYRICS, Revision, parse_text as parse_lyric_text,
+    track_key as lyric_track_key,
+};
 pub use lyrics::{Lyrics, LyricsState};
 pub use network::{Network, Reconnected};
 pub use pins::{PinSort, Pins};
@@ -171,6 +176,7 @@ pub struct Sonora {
     pub library: Entity<Library>,
     pub history: Entity<History>,
     pub lyrics: Entity<Lyrics>,
+    pub lyric_book: Entity<LyricBook>,
     pub network: Entity<Network>,
     pub pins: Entity<Pins>,
     pub playback: Entity<Playback>,
@@ -244,13 +250,23 @@ pub fn init(
             cx,
         )
     });
+    let lyric_book = cx.new(|cx| {
+        LyricBook::new(
+            playback.clone(),
+            session.clone(),
+            settings.clone(),
+            lyrics_providers.clone(),
+            database.clone(),
+            cx,
+        )
+    });
     let lyrics = cx.new(|cx| {
         Lyrics::new(
             playback.clone(),
             queue.clone(),
             session.clone(),
             settings.clone(),
-            lyrics_providers,
+            (lyrics_providers, lyric_book.clone()),
             io.clone(),
             cx,
         )
@@ -287,6 +303,7 @@ pub fn init(
         library,
         history,
         lyrics,
+        lyric_book,
         network,
         pins,
         playback,

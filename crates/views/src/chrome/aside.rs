@@ -286,6 +286,8 @@ impl QueuePosition {
 }
 
 pub(crate) struct Aside {
+    sources: ui::Popovers,
+    source_scrollbar: Entity<Scrollbar>,
     queue: Entity<Queue>,
     playback: Entity<Playback>,
     lyrics: Entity<Lyrics>,
@@ -407,6 +409,8 @@ impl Aside {
             placing: false,
             context_menu: None,
             track_menu: ItemMenu::new(playlist_scrollbar, cx),
+            sources: ui::Popovers::default(),
+            source_scrollbar: cx.new(|_| Scrollbar::new(ScrollHandle::new())),
             drop_gap: None,
             scroll,
             scrollbar,
@@ -2061,6 +2065,14 @@ impl Render for Aside {
                 !self.compact && (self.titled || self.tab == SideTab::Queue),
                 |this| this.child(self.header(sections, window, cx)),
             )
+            .when(!self.compact && self.tab == SideTab::Lyrics, |this| {
+                this.child(div().flex().flex_none().px_2().child(super::lyrics_sources(
+                    &self.lyrics,
+                    &self.sources,
+                    &self.source_scrollbar,
+                    cx,
+                )))
+            })
             .child(
                 div()
                     .id("queue-drop")
@@ -2394,9 +2406,10 @@ fn selected_romanization(
 
 /// Which source a sheet came from and, when it names them, who wrote the song.
 fn credit_lines(source: &str, writers: &[String]) -> (SharedString, Option<SharedString>) {
-    let from = match source == music::lyrics::LOCAL {
-        true => t!("lyrics-source-local"),
-        false => t!("lyrics-source", source = source),
+    let from = match source {
+        music::lyrics::LOCAL => t!("lyrics-source-local"),
+        state::PERSONAL_LYRICS => t!("book-personal"),
+        _ => t!("lyrics-source", source = source),
     };
     let by = (!writers.is_empty()).then(|| {
         let writers = writers.join(", ");
